@@ -1,4 +1,4 @@
-module RiskQuantLib.FileTool (
+module RiskQuantLib.Tool.File (
   listDir,
   readFileWithUtf8,
   ensureDir,

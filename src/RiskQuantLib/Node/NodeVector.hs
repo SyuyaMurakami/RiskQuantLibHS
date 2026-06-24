@@ -3,14 +3,14 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module RiskQuantLib.NodeVector (
+module RiskQuantLib.Node.NodeVector (
   NodeIndex,
   NodeVector,
   new,
   newN,
   len,
   empty,
-  RiskQuantLib.NodeVector.elem,
+  RiskQuantLib.Node.NodeVector.elem,
   append,
   appendList,
   iLoc,
@@ -26,7 +26,7 @@ module RiskQuantLib.NodeVector (
   parallelN_,
   add,
   sub,
-  RiskQuantLib.NodeVector.filter,
+  RiskQuantLib.Node.NodeVector.filter,
   filterP,
   filterPN,
   setV,
@@ -38,10 +38,10 @@ module RiskQuantLib.NodeVector (
   hasPN,
   stepBy,
   reduce,
-  RiskQuantLib.NodeVector.sum,
+  RiskQuantLib.Node.NodeVector.sum,
   prod,
-  RiskQuantLib.NodeVector.min,
-  RiskQuantLib.NodeVector.max,
+  RiskQuantLib.Node.NodeVector.min,
+  RiskQuantLib.Node.NodeVector.max,
   mean,
   cumReduce,
   cumSum,
@@ -66,9 +66,9 @@ module RiskQuantLib.NodeVector (
   groupS
 ) where
 
-import qualified RiskQuantLib.Algorithms as VAG
-import qualified RiskQuantLib.AttributeKey as AK
-import qualified RiskQuantLib.Node as N
+import qualified RiskQuantLib.Operation.Vector as OPV
+import qualified RiskQuantLib.Attribute.Key as AK
+import qualified RiskQuantLib.Node.Node as N
 
 import qualified Data.Vector.Strict as V
 import qualified Data.Vector.Unboxed as VU
@@ -130,13 +130,13 @@ parallelN :: Int -> NodeVector a -> (N.Node a -> IO b) -> IO (V.Vector b)
 parallelN num nvc func = ANC.mapConcurrently funcBlock nvcBlock >>= return . V.concat
   where
     funcBlock = \nvcb -> for nvcb func
-    nvcBlock = VAG.splitTo nvc num
+    nvcBlock = OPV.splitTo nvc num
 
 parallelN_ :: Int -> NodeVector a -> (N.Node a -> IO b) -> IO ()
 parallelN_ num nvc func = ANC.mapConcurrently_ funcBlock nvcBlock
   where
     funcBlock = \nvcb -> for_ nvcb func
-    nvcBlock = VAG.splitTo nvc num
+    nvcBlock = OPV.splitTo nvc num
 
 add :: NodeVector a -> NodeVector a -> NodeVector a
 add nvcA nvcB = nvcA V.++ nvcB
@@ -177,7 +177,7 @@ getS :: NodeVector a -> [AK.AttrName] -> a -> IO (V.Vector (V.Vector a))
 getS nvc attrL def = ANC.mapConcurrently (\attr -> get nvc attr def) $ V.fromList attrL
 
 has :: NodeVector a -> AK.AttrName -> IO (NodeVector a)
-has nvc attr = let !ak = AK.toAttr attr in RiskQuantLib.NodeVector.filter nvc $ \n -> N.hasByKey n ak 
+has nvc attr = let !ak = AK.toAttr attr in RiskQuantLib.Node.NodeVector.filter nvc $ \n -> N.hasByKey n ak 
 
 hasPN :: Int -> NodeVector a -> AK.AttrName -> IO (NodeVector a)
 hasPN num nvc attr = let !ak = AK.toAttr attr in filterPN num nvc $ \n -> N.hasByKey n ak
@@ -236,35 +236,35 @@ cumMax nvc attr = cumReduce Prelude.max nvc attr
 
 {-# INLINABLE rolling #-}
 rolling :: NodeVector a -> Int -> V.Vector (NodeVector a)
-rolling nvc window = VAG.rolling nvc window
+rolling nvc window = OPV.rolling nvc window
 
 {-# INLINABLE rollingCenter #-}
 rollingCenter :: NodeVector a -> Int -> V.Vector (NodeVector a)
-rollingCenter nvc window = VAG.rollingCenter nvc window
+rollingCenter nvc window = OPV.rollingCenter nvc window
 
 {-# INLINABLE sort #-}
 sort :: Ord a => NodeVector a -> AK.AttrName -> Bool -> IO (NodeVector a)
-sort nvc attr ascending = has nvc attr >>= \t -> let !ak = AK.toAttr attr in for t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ VAG.argSortBy s (\i -> t V.! i) ascending
+sort nvc attr ascending = has nvc attr >>= \t -> let !ak = AK.toAttr attr in for t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ OPV.argSortBy s (\i -> t V.! i) ascending
 
 {-# INLINABLE sortBy #-}
 sortBy :: Ord b => NodeVector a -> (N.Node a -> IO b) -> Bool -> IO (NodeVector a)
-sortBy nvc func ascending = for nvc func >>= \s -> return $ VAG.argSortBy s (\i -> nvc V.! i) ascending
+sortBy nvc func ascending = for nvc func >>= \s -> return $ OPV.argSortBy s (\i -> nvc V.! i) ascending
 
 {-# INLINABLE sortU #-}
 sortU :: forall a. (Ord a, VU.Unbox a) => NodeVector a -> AK.AttrName -> Bool -> IO (NodeVector a)
-sortU nvc attr ascending = has nvc attr >>= \t -> let !ak = AK.toAttr attr in for t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ V.backpermute nvc $ VG.convert $ VAG.argSort (VG.convert s :: VU.Vector a) ascending
+sortU nvc attr ascending = has nvc attr >>= \t -> let !ak = AK.toAttr attr in for t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ V.backpermute nvc $ VG.convert $ OPV.argSort (VG.convert s :: VU.Vector a) ascending
 
 {-# INLINABLE sortUBy #-}
 sortUBy :: forall a b. (Ord b, VU.Unbox b) => NodeVector a -> (N.Node a -> IO b) -> Bool -> IO (NodeVector a)
-sortUBy nvc func ascending = for nvc func >>= \s -> return $ V.backpermute nvc $ VG.convert $ VAG.argSort (VG.convert s :: VU.Vector b) ascending
+sortUBy nvc func ascending = for nvc func >>= \s -> return $ V.backpermute nvc $ VG.convert $ OPV.argSort (VG.convert s :: VU.Vector b) ascending
 
 {-# INLINABLE sortPN #-}
 sortPN :: Ord a => Int -> NodeVector a -> AK.AttrName -> Bool -> IO (NodeVector a)
-sortPN num nvc attr ascending = hasPN num nvc attr >>= \t -> let !ak = AK.toAttr attr in parallelN num t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ VAG.argSortBy s (\i -> t V.! i) ascending
+sortPN num nvc attr ascending = hasPN num nvc attr >>= \t -> let !ak = AK.toAttr attr in parallelN num t (\n -> N.getUnsafeByKey n ak) >>= \s -> return $ OPV.argSortBy s (\i -> t V.! i) ascending
 
 {-# INLINABLE sortS #-}
 sortS :: Ord a => NodeVector a -> [AK.AttrName] -> Bool -> IO (NodeVector a)
-sortS nvc attrL ascending = ANC.mapConcurrently (\attr -> let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak) attrL >>= \s -> return $ VAG.argSortByS s (\i -> nvc V.! i) ascending
+sortS nvc attrL ascending = ANC.mapConcurrently (\attr -> let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak) attrL >>= \s -> return $ OPV.argSortByS s (\i -> nvc V.! i) ascending
 
 {-# INLINABLE groupCoreBy #-}
 groupCoreBy :: Ord b => NodeVector a -> (N.Node a -> IO b) -> (V.Vector b -> V.Vector NodeIndex) -> IO (V.Vector (NodeVector a))
@@ -273,7 +273,7 @@ groupCoreBy nvc calFunc sortFunc = do
   let !idx = sortFunc s
   let !ns = V.backpermute nvc idx
   let !vs = V.backpermute s idx
-  let !vg = VAG.group vs
+  let !vg = OPV.group vs
   let !lens = V.map V.length vg
   let !offsets = V.prescanl' (+) 0 lens
   return $ V.zipWith (\off l -> V.slice off l ns) offsets lens
@@ -284,19 +284,19 @@ groupCore nvc attr sortFunc = let !ak = AK.toAttr attr in has nvc attr >>= \t ->
 
 {-# INLINABLE groupBy #-}
 groupBy :: Ord b => NodeVector a -> (N.Node a -> IO b) -> IO (V.Vector (NodeVector a))
-groupBy nvc func = groupCoreBy nvc func $ \s -> VAG.argSort s True
+groupBy nvc func = groupCoreBy nvc func $ \s -> OPV.argSort s True
 
 {-# INLINABLE group #-}
 group :: Ord a => NodeVector a -> AK.AttrName -> IO (V.Vector (NodeVector a))
-group nvc attr = groupCore nvc attr $ \s -> VAG.argSort s True
+group nvc attr = groupCore nvc attr $ \s -> OPV.argSort s True
 
 {-# INLINABLE groupUBy #-}
 groupUBy :: forall a b. (Ord b, VU.Unbox b) => NodeVector a -> (N.Node a -> IO b) -> IO (V.Vector (NodeVector a))
-groupUBy nvc func = groupCoreBy nvc func $ \s -> VG.convert $ VAG.argSort (VG.convert s :: VU.Vector b) True
+groupUBy nvc func = groupCoreBy nvc func $ \s -> VG.convert $ OPV.argSort (VG.convert s :: VU.Vector b) True
 
 {-# INLINABLE groupU #-}
 groupU :: forall a. (Ord a, VU.Unbox a) => NodeVector a -> AK.AttrName -> IO (V.Vector (NodeVector a))
-groupU nvc attr = groupCore nvc attr $ \s -> VG.convert $ VAG.argSort (VG.convert s :: VU.Vector a) True
+groupU nvc attr = groupCore nvc attr $ \s -> VG.convert $ OPV.argSort (VG.convert s :: VU.Vector a) True
 
 {-# INLINABLE groupPN #-}
 groupPN :: Ord a => Int -> NodeVector a -> AK.AttrName -> IO (V.Vector (NodeVector a))
@@ -304,10 +304,10 @@ groupPN num nvc attr = do
   t <- hasPN num nvc attr
   let !ak = AK.toAttr attr
   s <- parallelN num t $ \n -> N.getUnsafeByKey n ak
-  let !idx = VAG.argSort s True
+  let !idx = OPV.argSort s True
   let !ns = V.backpermute t idx
   let !vs = V.backpermute s idx
-  let !vg = VAG.group vs
+  let !vg = OPV.group vs
   let !lens = V.map V.length vg
   let !offsets = V.prescanl' (+) 0 lens
   return $ V.zipWith (\off l -> V.slice off l ns) offsets lens
@@ -316,10 +316,10 @@ groupPN num nvc attr = do
 groupS :: Ord a => NodeVector a -> [AK.AttrName] -> IO (V.Vector (NodeVector a))
 groupS nvc attrL = do
   s <- ANC.mapConcurrently (\attr -> let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak) attrL
-  let !idx = VAG.argSortS s True
+  let !idx = OPV.argSortS s True
   let !ns = V.backpermute nvc idx
   let !vs = map (\ss -> V.backpermute ss idx) s
-  let !vg = V.groupBy (\i j -> VAG.compareS vs True i j == EQ) $ V.enumFromN 0 (len nvc)
+  let !vg = V.groupBy (\i j -> OPV.compareS vs True i j == EQ) $ V.enumFromN 0 (len nvc)
   let !lens = V.map V.length $ V.fromList vg
   let !offsets = V.prescanl' (+) 0 lens
   return $ V.zipWith (\off l -> V.slice off l ns) offsets lens

@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module RiskQuantLib.Algorithms (
+module RiskQuantLib.Operation.Vector (
   fillNan,
   dropNan,
   isNan,

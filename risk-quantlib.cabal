@@ -20,7 +20,7 @@ name:               risk-quantlib
 -- PVP summary:     +-+------- breaking API changes
 --                  | | +----- non-breaking API additions
 --                  | | | +--- code changes with no API change
-version:            0.1.34.0
+version:            0.1.35.0
 
 -- A short (one-line) description of the package.
 -- synopsis:
@@ -60,14 +60,18 @@ library
 
     -- Modules exported by the library.
     exposed-modules:
-        RiskQuantLib.Algorithms,
-        RiskQuantLib.AttributeKey,
-        RiskQuantLib.AttributeValue,
-        RiskQuantLib.FileTool,
-        RiskQuantLib.Graph,
-        RiskQuantLib.Node,
-        RiskQuantLib.NodeVector
-
+        RiskQuantLib.Attribute.Key,
+        RiskQuantLib.Attribute.Value,
+        RiskQuantLib.Node.Node,
+        RiskQuantLib.Node.NodeVector,
+        RiskQuantLib.Operation.Vector,
+        RiskQuantLib.Operation.Graph,
+        RiskQuantLib.Operation.GraphIO,
+        RiskQuantLib.Operation.NodeList,
+        RiskQuantLib.Operation.Series,
+        RiskQuantLib.Operation.Mix,
+        RiskQuantLib.Operation.Dict,
+        RiskQuantLib.Tool.File
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -90,8 +94,6 @@ library
         async >=2.2.5,
         hashtables >=1.4.2,
         hashable >=1.5.0.0
-
-
 
     -- Directories containing source files.
     hs-source-dirs:   src

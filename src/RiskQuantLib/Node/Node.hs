@@ -1,4 +1,4 @@
-module RiskQuantLib.Node (
+module RiskQuantLib.Node.Node (
   Node,
   new',
   new,
@@ -27,7 +27,7 @@ module RiskQuantLib.Node (
   (.?)
 ) where
 
-import qualified RiskQuantLib.AttributeKey as AK
+import qualified RiskQuantLib.Attribute.Key as AK
 
 import qualified Data.Maybe as M
 import qualified Data.IntMap.Strict as IMap

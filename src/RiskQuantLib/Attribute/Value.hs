@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module RiskQuantLib.AttributeValue (
+module RiskQuantLib.Attribute.Value (
   ElementValue(..),
   ElementDict,
   AttrValue(..),
@@ -32,15 +32,14 @@ module RiskQuantLib.AttributeValue (
   notNan
 ) where
 
-import qualified RiskQuantLib.Node as N
-import qualified RiskQuantLib.NodeVector as NV
+import qualified RiskQuantLib.Node.Node as N
+import qualified RiskQuantLib.Node.NodeVector as NV
 
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
 import qualified Data.Vector.Strict as V
 import qualified Data.HashTable.IO as H
 import GHC.Generics (Generic)
--- import Data.Ord (Ordering(..))
 import Data.Ratio (numerator, denominator)
 import Data.Hashable (Hashable)
 import Text.Read (readMaybe)

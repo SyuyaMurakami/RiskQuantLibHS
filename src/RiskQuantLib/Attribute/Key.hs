@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 
-module RiskQuantLib.AttributeKey (
+module RiskQuantLib.Attribute.Key (
   AttrName,
   AttrIndex,
   toAttr
