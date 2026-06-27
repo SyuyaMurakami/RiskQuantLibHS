@@ -43,6 +43,7 @@ module RiskQuantLib.Node.NodeVector (
   RiskQuantLib.Node.NodeVector.min,
   RiskQuantLib.Node.NodeVector.max,
   mean,
+  std,
   cumReduce,
   cumSum,
   cumProd,
@@ -99,14 +100,14 @@ append nvc n = V.snoc nvc n
 appendList :: NodeVector a -> [N.Node a] -> NodeVector a
 appendList nvc ns = nvc V.++ (V.fromList ns)
 
-iLoc :: NodeVector a -> NodeIndex -> N.Node a
-iLoc nvc i = nvc V.! i
+iLocN :: NodeVector a -> NodeIndex -> N.Node a
+iLocN nvc i = OPV.iLocN nvc i
 
 iLocV ::  NodeVector a -> V.Vector NodeIndex -> NodeVector a
 iLocV nvc il = V.backpermute nvc il
 
-iLocN ::  NodeVector a -> [NodeIndex] -> NodeVector a
-iLocN nvc il = iLocV nvc $ V.fromList il
+iLoc ::  NodeVector a -> [NodeIndex] -> NodeVector a
+iLoc nvc il = iLocV nvc $ V.fromList il
 
 enumerate :: NodeVector a -> (NodeIndex -> N.Node a -> IO b) -> IO (V.Vector b)
 enumerate nvc func = V.imapM func nvc
@@ -219,8 +220,22 @@ mean nvc attr = V.foldM' func (0 :: Integer, 0) nvc >>= \(c, s) -> return $ if c
         Nothing -> return accu
         Just v -> return (count + 1, accuValue + v)
 
+std :: (Fractional a, Floating a) => NodeVector a -> AK.AttrName -> IO (Maybe a)
+std nvc attr = do
+  av <- let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak
+  let (cMean, sMean) = V.foldl' func (0 :: Integer, 0) av
+  let valueMean = if cMean == 0 then Nothing else Just (sMean / (fromIntegral cMean))
+  let bias = V.map ((\i -> (*) <$> i <*> i) . (\j -> (-) <$> j <*> valueMean)) av
+  let (cBias, sBias) = V.foldl' func (0 :: Integer, 0) bias
+  let res = if cBias == 0 then Nothing else Just (sqrt (sBias / (fromIntegral cBias - 1)))
+  return res
+  where
+    func accu@(count, accuValue) i = case i of
+      Nothing -> accu
+      Just r -> (count + 1, accuValue + r)
+
 cumReduce :: (a -> a -> a) -> NodeVector a -> AK.AttrName -> IO (V.Vector (Maybe a))
-cumReduce func nvc attr = let !ak = AK.toAttr attr in for nvc (\n -> N.getMaybeByKey n ak) >>= \nv -> return $ V.prescanl' (stepBy func) Nothing nv
+cumReduce func nvc attr = let !ak = AK.toAttr attr in for nvc (\n -> N.getMaybeByKey n ak) >>= \nv -> return $ V.postscanl' (stepBy func) Nothing nv
 
 cumSum :: Num a => NodeVector a -> AK.AttrName -> IO (V.Vector (Maybe a))
 cumSum nvc attr = cumReduce (+) nvc attr

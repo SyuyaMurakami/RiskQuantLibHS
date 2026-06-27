@@ -16,6 +16,7 @@ module RiskQuantLib.Operation.Mix (
   appendList,
   iLocV,
   iLoc,
+  RiskQuantLib.Operation.Mix.head,
   RiskQuantLib.Operation.Mix.take,
   RiskQuantLib.Operation.Mix.last,
   lastN,
@@ -59,8 +60,8 @@ len (AV.NodeList (_, nvc)) = NV.len nvc
 len _ = 0
 
 (.!) :: OG.Graph -> NV.NodeIndex -> OG.Graph
-(.!) (AV.Series sr) idx = sr V.! idx
-(.!) (AV.NodeList (_, nvc)) idx = AV.Node $ nvc V.! idx
+(.!) (AV.Series sr) idx = OPV.iLocN sr idx
+(.!) (AV.NodeList (_, nvc)) idx = AV.Node $ OPV.iLocN nvc idx
 (.!) _ _ = AV.attrValueNan
 
 (.>) :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
@@ -110,13 +111,18 @@ iLocV _ _ = AV.attrValueNan
 
 iLoc :: OG.Graph -> [NV.NodeIndex] -> OG.Graph
 iLoc (AV.Series sr) il = AV.Series $ V.backpermute sr (V.fromList il)
-iLoc (AV.NodeList (q, nvc)) il = AV.NodeList (q, NV.iLocN nvc il)
+iLoc (AV.NodeList (q, nvc)) il = AV.NodeList (q, NV.iLoc nvc il)
 iLoc _ _ = AV.attrValueNan
 
 take :: Int -> OG.Graph -> OG.Graph
 take num (AV.Series sr) = AV.Series $ V.take num sr
 take num (AV.NodeList (q, nvc)) = AV.NodeList (q, V.take num nvc)
 take _ _ = AV.attrValueNan
+
+head :: OG.Graph -> OG.Graph
+head (AV.Series sr) = V.head sr
+head (AV.NodeList (_, nvc)) = AV.Node $ V.head nvc
+head _ = AV.attrValueNan
 
 last :: OG.Graph -> OG.Graph
 last (AV.Series sr) = V.last sr

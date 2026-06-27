@@ -7,6 +7,7 @@ module RiskQuantLib.Operation.NodeList (
   get,
   has,
   set,
+  setAt,
   setBy,
   getPN,
   getS,
@@ -31,12 +32,14 @@ module RiskQuantLib.Operation.NodeList (
   group,
   groupPN,
   groupS,
+  groupKey,
   mapAt,
   mapAtS,
   toDict
 ) where
 
 import qualified RiskQuantLib.Operation.Graph as OG
+import qualified RiskQuantLib.Operation.Dictionary as OD
 import qualified RiskQuantLib.Attribute.Key as AK
 import qualified RiskQuantLib.Attribute.Value as AV
 import qualified RiskQuantLib.Node.Node as N
@@ -44,6 +47,7 @@ import qualified RiskQuantLib.Node.NodeVector as NV
 
 import qualified Data.Vector.Strict as V
 import qualified Data.HashTable.IO as H
+import qualified Data.Maybe as MB
 import qualified Control.Concurrent.Async as ANC
 
 get :: OG.Graph -> AK.AttrName -> IO OG.Graph
@@ -54,11 +58,16 @@ has :: OG.Graph -> AK.AttrName -> IO OG.Graph
 has (AV.NodeList (q, nvc)) attr = NV.has nvc attr >>= \vb -> return $ AV.NodeList (q, vb)
 has _ _ = OG.new
 
-set :: OG.Graph -> AK.AttrName -> [NV.NodeIndex] -> [OG.Graph] -> IO ()
-set (AV.NodeList (_, nvc)) attr key value = NV.set nvc attr key value
-set _ _ _ _ = return ()
+set :: OG.Graph -> AK.AttrName -> OG.Graph -> IO ()
+set (AV.NodeList (_, nvc)) attr (AV.Series sr) = NV.set nvc attr [0..(V.length sr - 1)] (V.toList sr)
+set (AV.NodeList (_, nvcA)) attr (AV.NodeList (_, nvcB)) = NV.set nvcA attr [0..(V.length nvcB - 1)] (V.toList $ V.map AV.Node nvcB)
+set _ _ _ = return ()
 
-setBy :: OG.Graph -> AK.AttrName -> AK.AttrName -> AV.ElementDict -> IO ()
+setAt :: OG.Graph -> AK.AttrName -> [NV.NodeIndex] -> [OG.Graph] -> IO ()
+setAt (AV.NodeList (_, nvc)) attr key value = NV.set nvc attr key value
+setAt _ _ _ _ = return ()
+
+setBy :: OG.Graph -> AK.AttrName -> AK.AttrName -> OD.ElementDict -> IO ()
 setBy (AV.NodeList (_, nvc)) attrKey attrValue dict = NV.for_ nvc $ \n -> do
   key <- n N..> attrKey
   case key of
@@ -82,49 +91,41 @@ hasPN :: Int -> OG.Graph -> AK.AttrName -> IO OG.Graph
 hasPN num (AV.NodeList (q, nvc)) attr = NV.hasPN num nvc attr >>= \vb -> return $ AV.NodeList (q, vb)
 hasPN _ _ _ = OG.new
 
-reduce :: (OG.Graph -> OG.Graph -> OG.Graph) -> OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-reduce func (AV.NodeList (_, nvc)) attr = NV.reduce func nvc attr
-reduce _ _ _ = return Nothing
+reduce :: (OG.Graph -> OG.Graph -> OG.Graph) -> OG.Graph -> AK.AttrName -> IO OG.Graph
+reduce func (AV.NodeList (_, nvc)) attr = NV.reduce func nvc attr >>= return . MB.fromMaybe AV.attrValueNan
+reduce _ _ _ = return AV.attrValueNan
 
-sum :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-sum (AV.NodeList (_, nvc)) attr = NV.sum nvc attr
-sum _ _ = return Nothing
+sum :: OG.Graph -> AK.AttrName -> IO OG.Graph
+sum g attr = reduce (+) g attr
 
-prod :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-prod (AV.NodeList (_, nvc)) attr = NV.prod nvc attr
-prod _ _ = return Nothing
+prod :: OG.Graph -> AK.AttrName -> IO OG.Graph
+prod g attr = reduce (*) g attr
 
-min :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-min (AV.NodeList (_, nvc)) attr = NV.min nvc attr
-min _ _ = return Nothing
+min :: OG.Graph -> AK.AttrName -> IO OG.Graph
+min g attr = reduce Prelude.min g attr
 
-max :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-max (AV.NodeList (_, nvc)) attr = NV.max nvc attr
-max _ _ = return Nothing
+max :: OG.Graph -> AK.AttrName -> IO OG.Graph
+max g attr = reduce Prelude.max g attr
 
-mean :: OG.Graph -> AK.AttrName -> IO (Maybe OG.Graph)
-mean (AV.NodeList (_, nvc)) attr = NV.mean nvc attr
-mean _ _ = return Nothing
+mean :: OG.Graph -> AK.AttrName -> IO OG.Graph
+mean (AV.NodeList (_, nvc)) attr = NV.mean nvc attr >>= return . MB.fromMaybe AV.attrValueNan
+mean _ _ = return AV.attrValueNan
 
-cumReduce :: (OG.Graph -> OG.Graph -> OG.Graph) -> OG.Graph -> AK.AttrName -> IO (V.Vector (Maybe OG.Graph))
-cumReduce func (AV.NodeList (_, nvc)) attr = NV.cumReduce func nvc attr
-cumReduce _ _ _ = return V.empty
+cumReduce :: (OG.Graph -> OG.Graph -> OG.Graph) -> OG.Graph -> AK.AttrName -> IO OG.Graph
+cumReduce func (AV.NodeList (_, nvc)) attr = NV.cumReduce func nvc attr >>= return . AV.Series . V.map (MB.fromMaybe AV.attrValueNan)
+cumReduce _ _ _ = return AV.attrValueNan
 
-cumSum :: OG.Graph -> AK.AttrName -> IO (V.Vector (Maybe OG.Graph))
-cumSum (AV.NodeList (_, nvc)) attr = NV.cumSum nvc attr
-cumSum _ _ = return V.empty
+cumSum :: OG.Graph -> AK.AttrName -> IO OG.Graph
+cumSum g attr = cumReduce (+) g attr
 
-cumProd :: OG.Graph -> AK.AttrName -> IO (V.Vector (Maybe OG.Graph))
-cumProd (AV.NodeList (_, nvc)) attr = NV.cumProd nvc attr
-cumProd _ _ = return V.empty
+cumProd :: OG.Graph -> AK.AttrName -> IO OG.Graph
+cumProd g attr = cumReduce (*) g attr
 
-cumMin :: OG.Graph -> AK.AttrName -> IO (V.Vector (Maybe OG.Graph))
-cumMin (AV.NodeList (_, nvc)) attr = NV.cumMin nvc attr
-cumMin _ _ = return V.empty
+cumMin :: OG.Graph -> AK.AttrName -> IO OG.Graph
+cumMin g attr = cumReduce Prelude.min g attr
 
-cumMax :: OG.Graph -> AK.AttrName -> IO (V.Vector (Maybe OG.Graph))
-cumMax (AV.NodeList (_, nvc)) attr = NV.cumMax nvc attr
-cumMax _ _ = return V.empty
+cumMax :: OG.Graph -> AK.AttrName -> IO OG.Graph
+cumMax g attr = cumReduce Prelude.max g attr
 
 {-# INLINABLE rollingCore #-}
 rollingCore :: OG.Graph -> Int -> AK.AttrName -> (NV.NodeVector OG.Graph -> Int -> V.Vector (NV.NodeVector OG.Graph)) -> IO ()
@@ -174,6 +175,15 @@ groupS :: OG.Graph -> [AK.AttrName] -> IO OG.Graph
 groupS (AV.NodeList (_, nvc)) attrL = (V.zipWith (\n g -> AV.NodeList (n, g)) <$> NV.newN (V.length nvc) <*> NV.groupS nvc attrL) >>= return . AV.Series
 groupS _ _ = return AV.attrValueNan
 
+groupKey :: OG.Graph -> AK.AttrName -> IO OG.Graph
+groupKey (AV.Series sr) attr = V.mapM func sr >>= return . AV.Series
+  where
+    func (AV.NodeList (_, nvc))
+      | V.length nvc == 0 = return AV.attrValueNan
+      | otherwise = V.head nvc N...> attr
+    func _ = return AV.attrValueNan
+groupKey _ _ = return AV.attrValueNan
+
 mapAt :: AK.AttrName -> (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
 mapAt attr func (AV.NodeList (_, nvc)) = do
   NV.for_ nvc $ \n -> do
@@ -186,9 +196,9 @@ mapAt _ _ _ = return ()
 mapAtS :: [AK.AttrName] -> (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
 mapAtS attrL func g = ANC.mapConcurrently_ (\attr -> mapAt attr func g) attrL
 
-toDict :: AK.AttrName -> AK.AttrName -> OG.Graph -> IO AV.ElementDict
+toDict :: AK.AttrName -> AK.AttrName -> OG.Graph -> IO OD.ElementDict
 toDict attrKey attrValue (AV.NodeList (_, nvc)) = do
-  m <- (H.newSized $ V.length nvc) :: IO AV.ElementDict
+  m <- (H.newSized $ V.length nvc) :: IO OD.ElementDict
   V.forM_ nvc $ \n -> do
     key <- (N..>) n attrKey
     case key of

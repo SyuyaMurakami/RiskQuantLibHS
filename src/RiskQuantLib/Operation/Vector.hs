@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module RiskQuantLib.Operation.Vector (
+  iLocN,
   fillNan,
   dropNan,
   isNan,
@@ -22,7 +23,11 @@ module RiskQuantLib.Operation.Vector (
   argSortByS,
   argSortS,
   sortS,
-  group
+  group,
+  mean,
+  std,
+  reduce, 
+  cumReduce
 ) where
 
 import qualified Data.Vector.Generic as VG
@@ -31,6 +36,10 @@ import qualified Data.Vector.Algorithms.Intro as Intro
 import Control.Monad.ST (runST)
 import Data.Ord (Down(..))
 import Data.Maybe (fromMaybe)
+
+{-# INLINABLE iLocN #-}
+iLocN :: forall a v. (VG.Vector v a) => v a -> Int -> a
+iLocN x i = x VG.! (if i < 0 then VG.length x + i else i)
 
 {-# INLINABLE fillNan #-}
 fillNan :: forall a v. (VG.Vector v a, VG.Vector v (Maybe a)) => v (Maybe a) -> a -> v a
@@ -158,4 +167,44 @@ sortS xs ascending = let frozenIndices = argSortS xs ascending in map (\c -> VG.
 
 {-# INLINABLE group #-}
 group :: forall a v. (Eq a, VG.Vector v a, VG.Vector v (v a)) => v a -> v (v a)
-group v = VG.fromList $ VG.group v
+group x = VG.fromList $ VG.group x
+
+{-# INLINABLE mean #-}
+mean :: forall a v. (Fractional a, VG.Vector v a) => (a -> Bool) -> v a -> Maybe a
+mean invalid x = if c == 0 then Nothing else Just (s / (fromIntegral c))
+  where
+    func accu@(count, accuValue) i = if invalid i then accu else (count + 1, accuValue + i)
+    (c, s) = VG.foldl' func (0 :: Integer, 0) x
+
+{-# INLINABLE std #-}
+std :: forall a v. (Fractional a, Floating a, VG.Vector v a) => (a -> Bool) -> v a -> Maybe a
+std invalid = finish . VG.foldl' step (0 :: Integer, 0, 0)
+  where
+    step (!n, !average, !m2) x
+      | invalid x = (n, average, m2)
+      | otherwise =
+          let n'     = n + 1
+              delta  = x - average
+              average'  = average + delta / fromIntegral n'
+              delta2 = x - average'
+              m2'    = m2 + delta * delta2
+          in (n', average', m2')
+    finish (n, _, m2)
+      | n < 2     = Nothing
+      | otherwise = Just (sqrt (m2 / fromIntegral (n - 1)))
+
+{-# INLINABLE stepR #-}
+stepR :: (a -> Bool) -> (a -> a -> a) -> Maybe a -> a -> Maybe a
+stepR invalid f accu i
+  | invalid i = accu
+  | otherwise = case accu of
+      Nothing -> Just i
+      Just r -> Just $ f r i
+
+{-# INLINABLE reduce #-}
+reduce :: forall a v. (VG.Vector v a) => (a -> Bool) -> (a -> a -> a) -> v a -> Maybe a
+reduce invalid func x = VG.foldl' (stepR invalid func) Nothing x
+
+{-# INLINABLE cumReduce #-}
+cumReduce :: forall a v. (VG.Vector v a, VG.Vector v (Maybe a)) => (a -> Bool) -> (a -> a -> a) -> v a -> v (Maybe a)
+cumReduce invalid func x = VG.postscanl' (stepR invalid func) Nothing x

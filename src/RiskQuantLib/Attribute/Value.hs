@@ -3,10 +3,8 @@
 
 module RiskQuantLib.Attribute.Value (
   ElementValue(..),
-  ElementDict,
   AttrValue(..),
   elementValueNan,
-  makeDict,
   attrValueNan,
   asInt,
   asDouble,
@@ -18,16 +16,20 @@ module RiskQuantLib.Attribute.Value (
   fromBool,
   fromString,
   fromList,
+  fromVector,
   toInt,
   toDouble,
   toText,
   toString,
   toBool,
   toList,
+  toVector,
   isInt,
   isDouble,
   isText,
   isBool,
+  isSeries,
+  isNodeList,
   isNan,
   notNan
 ) where
@@ -38,7 +40,7 @@ import qualified RiskQuantLib.Node.NodeVector as NV
 import qualified Data.Text as T
 import qualified Data.Text.Read as TR
 import qualified Data.Vector.Strict as V
-import qualified Data.HashTable.IO as H
+
 import GHC.Generics (Generic)
 import Data.Ratio (numerator, denominator)
 import Data.Hashable (Hashable)
@@ -52,7 +54,7 @@ elementValueNan = ElemText T.empty
 instance Show ElementValue where
   show (ElemInt a) = Prelude.show a
   show (ElemDouble a) = Prelude.show a
-  show (ElemText a) = if a == T.empty then "" else Prelude.show a
+  show (ElemText a) = if a == T.empty then "" else T.unpack a
   show (ElemBool a) = Prelude.show a
 
 instance Ord ElementValue where
@@ -168,11 +170,6 @@ instance Floating ElementValue where
   atanh _ = elementValueNan
 
 instance Hashable ElementValue
-
-type ElementDict = H.LinearHashTable ElementValue ElementValue
-
-makeDict :: [ElementValue] -> [ElementValue] -> IO ElementDict
-makeDict key value = H.new >>= \m -> V.zipWithM_ (\k v -> H.insert m k v) (V.fromList key) (V.fromList value) >> return m
 
 data AttrValue = Element ElementValue
   | Series (V.Vector AttrValue)
@@ -342,6 +339,9 @@ fromString = fromText . T.pack
 fromList :: [AttrValue] -> AttrValue
 fromList = Series . V.fromList
 
+fromVector :: V.Vector AttrValue -> AttrValue
+fromVector = Series
+
 toInt :: AttrValue -> Int
 toInt (Element (ElemInt v)) = v
 toInt _ = 0
@@ -361,10 +361,13 @@ toBool :: AttrValue -> Bool
 toBool (Element (ElemBool v)) = v
 toBool _ = False
 
+toVector :: AttrValue -> V.Vector AttrValue
+toVector (Series sr) = sr
+toVector (NodeList (_, nvc)) = V.map Node nvc
+toVector _ = V.empty
+
 toList :: AttrValue -> [AttrValue]
-toList (Series sr) = V.toList sr
-toList (NodeList (_, nvc)) = V.toList $ V.map Node nvc
-toList _ = []
+toList g = V.toList $ toVector g
 
 isInt :: AttrValue -> Bool
 isInt (Element (ElemInt _)) = True
@@ -381,6 +384,14 @@ isText _ = False
 isBool :: AttrValue -> Bool
 isBool (Element (ElemBool _)) = True
 isBool _ = False
+
+isSeries :: AttrValue -> Bool
+isSeries (Series _) = True
+isSeries _ = False
+
+isNodeList :: AttrValue -> Bool
+isNodeList (NodeList _) = True
+isNodeList _ = False
 
 isNan :: AttrValue -> Bool
 isNan v = v == attrValueNan

@@ -66,12 +66,12 @@ library
         RiskQuantLib.Node.NodeVector,
         RiskQuantLib.Operation.Vector,
         RiskQuantLib.Operation.Graph,
-        RiskQuantLib.Operation.GraphIO,
         RiskQuantLib.Operation.NodeList,
         RiskQuantLib.Operation.Series,
         RiskQuantLib.Operation.Mix,
-        RiskQuantLib.Operation.Dict,
-        RiskQuantLib.Tool.File
+        RiskQuantLib.Operation.Dictionary,
+        RiskQuantLib.Tool.File,
+        RiskQuantLib.Tool.CSV
 
     -- Modules included in this library but not exported.
     -- other-modules:

@@ -3,12 +3,13 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module RiskQuantLib.Operation.GraphIO (
+module RiskQuantLib.Tool.CSV (
   columnsAttr,
   readCSV,
   columns,
   mapAtAll,
   headN,
+  setAs,
   transpose,
   toCSV
 ) where
@@ -30,6 +31,13 @@ import qualified Control.Concurrent.Async as ANC
 columnsAttr :: AK.AttrName
 columnsAttr = "columns"
 
+columnsFill :: V.Vector T.Text -> V.Vector T.Text
+columnsFill vec = V.map fillCol (V.indexed vec)
+  where
+    fillCol (idx, cell)
+        | T.null cell = T.pack ("col-" ++ show idx)
+        | otherwise  = cell
+
 readCSV :: FilePath -> IO OG.Graph
 readCSV path = TF.readFileWithUtf8 path >>= \content -> do
   let allLines = V.filter (not . T.null) (V.fromList . T.lines $ content)
@@ -37,7 +45,7 @@ readCSV path = TF.readFileWithUtf8 path >>= \content -> do
     True -> N.new >>= \n -> return $ AV.NodeList (n, NV.new)
     False -> do
       let cells = V.map (\line -> V.fromList $ T.splitOn (T.pack ",") line) allLines
-      let header = V.head cells
+      let header = columnsFill $ V.head cells
       let values = V.tail cells
       vec <- V.forM values $ \line -> do
         n <- N.new
@@ -48,7 +56,7 @@ readCSV path = TF.readFileWithUtf8 path >>= \content -> do
       return $ AV.NodeList (n, vec)
 
 columns :: OG.Graph -> IO [AK.AttrName]
-columns g@(AV.NodeList (_, _)) = do
+columns g@(AV.NodeList _) = do
   col <- g OM..> columnsAttr
   case col of
     Just c -> OM.for c (return . T.unpack . AV.toText) >>= return . V.toList
@@ -56,7 +64,7 @@ columns g@(AV.NodeList (_, _)) = do
 columns _ = return []
 
 mapAtAll :: (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
-mapAtAll func g@(AV.NodeList (_, _)) = do
+mapAtAll func g@(AV.NodeList _) = do
   col <- g OM..> columnsAttr
   case col of
     Just (AV.Series sr) -> flip ANC.mapConcurrently_ sr $ \attr -> case attr of
@@ -67,6 +75,13 @@ mapAtAll _ _ = return ()
 
 headN :: Int -> OG.Graph -> IO OG.Graph
 headN num g = columns g >>= \col -> g `OM.iLoc` [0..(num-1)] `ONL.getS` col
+
+setAs :: OG.Graph -> AK.AttrName -> OG.Graph -> IO ()
+setAs g@(AV.NodeList _) attr value = do
+  col <- columns g
+  ONL.set g attr value
+  g OM..< columnsAttr $ AV.fromList . Prelude.map AV.fromString $ col ++ [attr]
+setAs _ _ _ = return ()
 
 transpose :: OG.Graph -> OG.Graph
 transpose (AV.Series sr) = AV.Series . V.fromList $ Prelude.map AV.fromList rows
