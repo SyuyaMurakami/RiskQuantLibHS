@@ -22,11 +22,15 @@ import qualified RiskQuantLib.Node.NodeVector as NV
 import qualified RiskQuantLib.Operation.Graph as OG
 import qualified RiskQuantLib.Operation.NodeList as ONL
 import qualified RiskQuantLib.Operation.Mix as OM
+import qualified RiskQuantLib.Operation.Vector as OPV
 
+import qualified GHC.Conc as GHCC
 import qualified Data.Text as T
 import qualified Data.List as L
 import qualified Data.Vector.Strict as V
+import qualified Data.IntMap.Strict as IMap
 import qualified Control.Concurrent.Async as ANC
+import qualified Control.Concurrent.STM as STM
 
 columnsAttr :: AK.AttrName
 columnsAttr = "columns"
@@ -44,13 +48,16 @@ readCSV path = TF.readFileWithUtf8 path >>= \content -> do
   case V.length allLines == 0 of
     True -> N.new >>= \n -> return $ AV.NodeList (n, NV.new)
     False -> do
-      let cells = V.map (\line -> V.fromList $ T.splitOn (T.pack ",") line) allLines
-      let header = columnsFill $ V.head cells
-      let values = V.tail cells
-      vec <- V.forM values $ \line -> do
-        n <- N.new
-        V.zipWithM_ (\attr v -> (N..<) n (T.unpack attr) (AV.fromText v)) header line
-        return n
+      let headLine = V.head allLines
+      let header = columnsFill . V.fromList $ T.splitOn (T.pack ",") headLine
+      let headerKey = V.map AK.toAttrT header
+      let valueLines = V.tail allLines
+      cores <- GHCC.getNumProcessors
+      let valuesBlock = OPV.splitTo valueLines cores
+      vecList <- flip ANC.mapConcurrently valuesBlock $ \block -> V.forM block $ \line -> do
+        let values = V.map AV.fromText . V.fromList . T.splitOn (T.pack ",") $ line
+        STM.newTVarIO $ IMap.fromList . V.toList $ V.zip headerKey values
+      let vec = V.concat vecList
       n <- N.new
       (N..<) n columnsAttr (AV.Series $ V.map AV.fromText header)
       return $ AV.NodeList (n, vec)

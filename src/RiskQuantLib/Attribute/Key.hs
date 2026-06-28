@@ -3,6 +3,7 @@
 module RiskQuantLib.Attribute.Key (
   AttrName,
   AttrIndex,
+  toAttrT,
   toAttr
 ) where
 
@@ -25,17 +26,20 @@ modifyAttrMap attrMap attrKey = IOR.atomicModifyIORef' attrMap $ \am ->
     Just v -> (am, v)
     Nothing -> let !sz = SM.size am in (SM.insert attrKey sz am, sz)
 
-fromAttrMap :: AttrMap -> AttrName -> IO AttrIndex
-fromAttrMap attrMap attrName = IOR.readIORef attrMap >>= \am -> 
-  let !an = T.pack attrName in case SM.lookup an am of
+fromAttrMap :: AttrMap -> AttrKey -> IO AttrIndex
+fromAttrMap attrMap attrKey = IOR.readIORef attrMap >>= \am -> 
+  case SM.lookup attrKey am of
     Just v -> return v
-    Nothing -> modifyAttrMap attrMap an
+    Nothing -> modifyAttrMap attrMap attrKey
 
 {-# NOINLINE globalSymbolTable #-}
 
 globalSymbolTable :: AttrMap
 globalSymbolTable = unsafePerformIO $ newAttrMap
 
+toAttrT :: AttrKey -> AttrIndex
+toAttrT attrKey = unsafePerformIO $ fromAttrMap globalSymbolTable attrKey
+
 toAttr :: AttrName -> AttrIndex
-toAttr attrName = unsafePerformIO $ fromAttrMap globalSymbolTable attrName
+toAttr attrName = let !attrKey = T.pack attrName in toAttrT attrKey
 
