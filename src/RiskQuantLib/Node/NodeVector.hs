@@ -64,7 +64,11 @@ module RiskQuantLib.Node.NodeVector (
   groupUBy,
   groupU,
   groupPN,
-  groupS
+  groupS,
+  dropDuplicateByAt,
+  dropDuplicateByAtS,
+  dropDuplicateAt,
+  dropDuplicateAtS
 ) where
 
 import qualified RiskQuantLib.Operation.Vector as OPV
@@ -339,3 +343,35 @@ groupS nvc attrL = do
   let !offsets = V.prescanl' (+) 0 lens
   return $ V.zipWith (\off l -> V.slice off l ns) offsets lens
 
+{-# INLINABLE equalMaybe #-}
+equalMaybe :: (a -> a -> Bool) -> Maybe a -> Maybe a -> Bool 
+equalMaybe func i j = case (i, j) of 
+  (Just k, Just q) -> func k q
+  (Nothing, Nothing) -> True
+  (_, _) -> False
+
+{-# INLINABLE dropDuplicateByAt #-}
+dropDuplicateByAt :: (Ord a) => NodeVector a -> (a -> a -> Bool) -> AK.AttrName -> IO (NodeVector a)
+dropDuplicateByAt nvc func attr = do
+  av <- let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak
+  let !idx = OPV.argSort av True
+  let !avSorted = V.backpermute av idx
+  let !idxUnique = V.backpermute idx $ OPV.argUniqBy (equalMaybe func) avSorted
+  return $ V.backpermute nvc idxUnique
+
+{-# INLINABLE dropDuplicateByAtS #-}
+dropDuplicateByAtS :: (Ord a) => NodeVector a -> (a -> a -> Bool) -> [AK.AttrName] -> IO (NodeVector a)
+dropDuplicateByAtS nvc func attrL = do
+  avs <- ANC.mapConcurrently (\attr -> let !ak = AK.toAttr attr in for nvc $ \n -> N.getMaybeByKey n ak) attrL
+  let !idx = OPV.argSortS avs True
+  let !avsSorted = V.map (\ss -> V.backpermute ss idx) $ V.fromList avs
+  let !idxUnique = V.backpermute idx $ OPV.argUniqBy (OPV.equalS avsSorted (equalMaybe func)) (V.enumFromN 0 (V.length idx))
+  return $ V.backpermute nvc idxUnique
+
+{-# INLINABLE dropDuplicateAt #-}
+dropDuplicateAt :: (Ord a) => NodeVector a -> AK.AttrName -> IO (NodeVector a)
+dropDuplicateAt nvc attr = dropDuplicateByAt nvc (==) attr
+
+{-# INLINABLE dropDuplicateAtS #-}
+dropDuplicateAtS :: (Ord a) => NodeVector a -> [AK.AttrName] -> IO (NodeVector a)
+dropDuplicateAtS nvc attrL = dropDuplicateByAtS nvc (==) attrL

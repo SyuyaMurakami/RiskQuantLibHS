@@ -1,8 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ExplicitForAll #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module RiskQuantLib.Operation.NodeList (
   get,
   has,
@@ -33,13 +28,17 @@ module RiskQuantLib.Operation.NodeList (
   groupPN,
   groupS,
   groupKey,
+  dropDuplicateAt,
+  dropDuplicateAtS,
   mapAt,
   mapAtS,
+  mapAtSPN,
   toDict
 ) where
 
 import qualified RiskQuantLib.Operation.Graph as OG
 import qualified RiskQuantLib.Operation.Dictionary as OD
+import qualified RiskQuantLib.Operation.Vector as OPV
 import qualified RiskQuantLib.Attribute.Key as AK
 import qualified RiskQuantLib.Attribute.Value as AV
 import qualified RiskQuantLib.Node.Node as N
@@ -184,6 +183,18 @@ groupKey (AV.Series sr) attr = V.mapM func sr >>= return . AV.Series
     func _ = return AV.attrValueNan
 groupKey _ _ = return AV.attrValueNan
 
+dropDuplicateAt :: OG.Graph -> AK.AttrName -> IO OG.Graph
+dropDuplicateAt (AV.NodeList (n, nvc)) attr = do
+  nvcUnique <- NV.dropDuplicateByAt nvc AV.is attr
+  return $ AV.NodeList (n, nvcUnique)
+dropDuplicateAt _ _ = return AV.attrValueNan
+
+dropDuplicateAtS :: OG.Graph -> [AK.AttrName] -> IO OG.Graph
+dropDuplicateAtS (AV.NodeList (n, nvc)) attrL = do
+  nvcUnique <- NV.dropDuplicateByAtS nvc AV.is attrL
+  return $ AV.NodeList (n, nvcUnique)
+dropDuplicateAtS _ _ = return AV.attrValueNan
+
 mapAt :: AK.AttrName -> (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
 mapAt attr func (AV.NodeList (_, nvc)) = do
   NV.for_ nvc $ \n -> do
@@ -195,6 +206,10 @@ mapAt _ _ _ = return ()
 
 mapAtS :: [AK.AttrName] -> (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
 mapAtS attrL func g = ANC.mapConcurrently_ (\attr -> mapAt attr func g) attrL
+
+mapAtSPN :: Int -> [AK.AttrName] -> (OG.Graph -> OG.Graph) -> OG.Graph -> IO ()
+mapAtSPN num attrL func (AV.NodeList (n, nvc)) = flip ANC.mapConcurrently_ (OPV.splitTo nvc num) $ \block -> ANC.mapConcurrently_ (\attr -> mapAt attr func $ AV.NodeList (n, block)) attrL
+mapAtSPN _ _ _ _ = return ()
 
 toDict :: AK.AttrName -> AK.AttrName -> OG.Graph -> IO OD.ElementDict
 toDict attrKey attrValue (AV.NodeList (_, nvc)) = do

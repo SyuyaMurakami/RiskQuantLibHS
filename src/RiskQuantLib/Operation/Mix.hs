@@ -1,10 +1,8 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module RiskQuantLib.Operation.Mix (
   len,
+  RiskQuantLib.Operation.Mix.null,
   (.!),
   (.>),
   (..>),
@@ -33,6 +31,13 @@ module RiskQuantLib.Operation.Mix (
   RiskQuantLib.Operation.Mix.filter,
   filterP,
   filterPN,
+  RiskQuantLib.Operation.Mix.zip,
+  RiskQuantLib.Operation.Mix.zipWith,
+  RiskQuantLib.Operation.Mix.zipWithM,
+  RiskQuantLib.Operation.Mix.map,
+  RiskQuantLib.Operation.Mix.mapM,
+  apply,
+  applyM,
   sortBy,
   sortUBy,
   groupBy,
@@ -58,6 +63,11 @@ len :: OG.Graph -> Int
 len (AV.Series v) = V.length v
 len (AV.NodeList (_, nvc)) = NV.len nvc
 len _ = 0
+
+null :: OG.Graph -> Bool
+null (AV.Series v) = V.null v
+null (AV.NodeList (_, nvc)) = V.null nvc
+null _ = True
 
 (.!) :: OG.Graph -> NV.NodeIndex -> OG.Graph
 (.!) (AV.Series sr) idx = OPV.iLocN sr idx
@@ -198,6 +208,37 @@ filterPN :: Int -> OG.Graph -> OG.Action Bool -> IO OG.Graph
 filterPN num g@(AV.Series sr) func = parallelN num g func >>= \bool -> return . AV.Series . snd . V.unzip $ V.filter (\(b, _) -> b) (V.zip bool sr) 
 filterPN num (AV.NodeList (q, nvc)) func = NV.filterPN num nvc (\n -> func (AV.Node n)) >>= \f -> return $ AV.NodeList (q, f)
 filterPN _ _ _ = return AV.attrValueNan
+
+zip :: OG.Graph -> OG.Graph -> V.Vector (OG.Graph, OG.Graph)
+zip (AV.Series srA) (AV.Series srB) = V.zip srA srB
+zip (AV.NodeList (_, nvcA)) (AV.NodeList (_, nvcB)) = V.zipWith (\i j -> (AV.Node i, AV.Node j)) nvcA nvcB
+zip _ _ = V.empty
+
+zipWith :: (OG.Graph -> OG.Graph -> a) -> OG.Graph -> OG.Graph -> V.Vector a
+zipWith func (AV.Series srA) (AV.Series srB) = V.zipWith func srA srB
+zipWith func (AV.NodeList (_, nvcA)) (AV.NodeList (_, nvcB)) = V.zipWith (\i j -> func (AV.Node i) (AV.Node j)) nvcA nvcB
+zipWith _ _ _ = V.empty
+
+zipWithM :: OG.Relation a -> OG.Graph -> OG.Graph -> IO (V.Vector a)
+zipWithM func (AV.Series srA) (AV.Series srB) = V.zipWithM func srA srB
+zipWithM func (AV.NodeList (_, nvcA)) (AV.NodeList (_, nvcB)) = V.zipWithM (\i j -> func (AV.Node i) (AV.Node j)) nvcA nvcB
+zipWithM _ _ _ = return V.empty
+
+map :: (OG.Graph -> a) -> OG.Graph -> V.Vector a
+map func (AV.Series sr) = V.map func sr
+map func (AV.NodeList (_, nvc)) = V.map (\n -> func $ AV.Node n) nvc
+map _ _ = V.empty
+
+mapM :: OG.Action a -> OG.Graph -> IO (V.Vector a)
+mapM func (AV.Series sr) = V.mapM func sr
+mapM func (AV.NodeList (_, nvc)) = V.mapM (\n -> func $ AV.Node n) nvc
+mapM _ _ = return V.empty
+
+apply :: (OG.Graph -> OG.Graph) -> OG.Graph -> OG.Graph
+apply func g = AV.Series $ RiskQuantLib.Operation.Mix.map func g
+
+applyM :: (OG.Graph -> IO OG.Graph) -> OG.Graph -> IO OG.Graph
+applyM func g = RiskQuantLib.Operation.Mix.mapM func g >>= return . AV.Series
 
 {-# INLINABLE sortBy #-}
 sortBy :: (Ord b) => OG.Graph -> OG.Action b -> Bool -> IO OG.Graph

@@ -1,8 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ExplicitForAll #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module RiskQuantLib.Operation.Series (
   unique,
   fillNan,
@@ -14,12 +9,7 @@ module RiskQuantLib.Operation.Series (
   shift,
   whereG,
   select,
-  RiskQuantLib.Operation.Series.zipWith,
-  RiskQuantLib.Operation.Series.zipWithM,
-  RiskQuantLib.Operation.Series.map,
-  RiskQuantLib.Operation.Series.mapM,
-  apply,
-  applyM,
+  dropDuplicate,
   reduce,
   RiskQuantLib.Operation.Series.sum,
   prod,
@@ -101,27 +91,9 @@ select (AV.Series sr) v = dropNan . AV.Series $ V.imap func sr
     func _ _ = AV.attrValueNan
 select _ _ = AV.attrValueNan
 
-zipWith :: (OG.Graph -> OG.Graph -> a) -> OG.Graph -> OG.Graph -> V.Vector a
-zipWith func (AV.Series srA) (AV.Series srB) = V.zipWith func srA srB
-zipWith _ _ _ = V.empty
-
-zipWithM :: OG.Relation a -> OG.Graph -> OG.Graph -> IO (V.Vector a)
-zipWithM func (AV.Series srA) (AV.Series srB) = V.zipWithM func srA srB
-zipWithM _ _ _ = return V.empty
-
-map :: (OG.Graph -> a) -> OG.Graph -> V.Vector a
-map func (AV.Series sr) = V.map func sr
-map _ _ = V.empty
-
-mapM :: OG.Action a -> OG.Graph -> IO (V.Vector a)
-mapM func (AV.Series sr) = V.mapM func sr
-mapM _ _ = return V.empty
-
-apply :: (OG.Graph -> OG.Graph) -> OG.Graph -> OG.Graph
-apply func g = AV.Series $ RiskQuantLib.Operation.Series.map func g
-
-applyM :: (OG.Graph -> IO OG.Graph) -> OG.Graph -> IO OG.Graph
-applyM func g = RiskQuantLib.Operation.Series.mapM func g >>= return . AV.Series
+dropDuplicate :: OG.Graph -> OG.Graph
+dropDuplicate (AV.Series sr) = AV.Series $ OPV.dropDuplicateBy AV.is sr
+dropDuplicate _ = AV.attrValueNan
 
 stepBy :: (OG.Graph -> OG.Graph -> OG.Graph) -> OG.Graph -> OG.Graph -> OG.Graph
 stepBy func accu i

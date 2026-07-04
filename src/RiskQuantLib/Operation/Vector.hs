@@ -20,10 +20,16 @@ module RiskQuantLib.Operation.Vector (
   argSortBy,
   argSort,
   compareS,
+  equalS,
   argSortByS,
   argSortS,
   sortS,
   group,
+  groupBy,
+  uniqBy,
+  argUniqBy,
+  dropDuplicateBy,
+  dropDuplicate,
   mean,
   std,
   reduce, 
@@ -31,6 +37,7 @@ module RiskQuantLib.Operation.Vector (
 ) where
 
 import qualified Data.Vector.Generic as VG
+import qualified Data.Vector.Generic.Mutable as VGM
 import qualified Data.Vector.Algorithms.Quicksort as VQS
 import qualified Data.Vector.Algorithms.Intro as Intro
 import Control.Monad.ST (runST)
@@ -143,6 +150,12 @@ compareS (c:cs) ascending idx1 idx2 =
     v2 = VG.unsafeIndex c idx2
     logic = if ascending then compare v1 v2 else compare v2 v1
 
+{-# INLINABLE equalS #-}
+equalS :: forall a v. (VG.Vector v a, VG.Vector v Bool, VG.Vector v (a, a), VG.Vector v (v a)) => v (v a) -> (a -> a -> Bool) -> Int -> Int -> Bool
+equalS cs func idx1 idx2 = VG.and $ VG.zipWith func v1 v2
+  where
+    (v1, v2) = VG.unzip $ VG.map (\c -> (VG.unsafeIndex c idx1, VG.unsafeIndex c idx2)) cs
+
 {-# INLINABLE argSortByS #-}
 argSortByS :: forall a b v. (Ord a, VG.Vector v a, VG.Vector v Int, VG.Vector v b) => [v a] -> (Int -> b) -> Bool -> v b
 argSortByS [] _ _ = VG.empty
@@ -168,6 +181,55 @@ sortS xs ascending = let frozenIndices = argSortS xs ascending in map (\c -> VG.
 {-# INLINABLE group #-}
 group :: forall a v. (Eq a, VG.Vector v a, VG.Vector v (v a)) => v a -> v (v a)
 group x = VG.fromList $ VG.group x
+
+{-# INLINABLE groupBy #-}
+groupBy :: forall a b v. (Eq b, Ord b, VG.Vector v Int, VG.Vector v (b, Int), VG.Vector v (Down (b, Int)), VG.Vector v a, VG.Vector v b, VG.Vector v (v a), VG.Vector v (v b)) => (a -> b) -> v a -> v (v a)
+groupBy func x = VG.zipWith (\s offlen -> VG.slice s offlen xSorted) splitStart accordingGroupLen
+  where
+    according = VG.map func x
+    idx = argSort according True
+    accordingSorted = VG.backpermute according idx
+    xSorted = VG.backpermute x idx
+    accordingGroup = group accordingSorted
+    accordingGroupLen = VG.map VG.length accordingGroup
+    splitStart = VG.prescanl' (+) 0 accordingGroupLen
+
+{-# INLINABLE uniqByWith #-}
+uniqByWith :: forall a b v. (VG.Vector v a, VG.Vector v b) => (a -> a -> Bool) -> ((Int, a) -> b) -> v a -> v b
+uniqByWith eq f v = runST $ do
+  let !n = VG.length v
+  if n == 0
+  then pure VG.empty
+  else do
+    mv <- VGM.unsafeNew n
+    let !x0 = VG.unsafeIndex v 0
+    VGM.unsafeWrite mv 0 $ f (0, x0)
+    let go !i !j !prev
+          | i == n = VG.unsafeFreeze (VGM.slice 0 j mv)
+          | otherwise =
+              let !x = VG.unsafeIndex v i
+              in if eq prev x
+                then go (i + 1) j prev
+                else do
+                  VGM.unsafeWrite mv j $ f (i, x)
+                  go (i + 1) (j + 1) x
+    go 1 1 x0
+
+{-# INLINABLE uniqBy #-}
+uniqBy :: forall a v. (VG.Vector v a) => (a -> a -> Bool) -> v a -> v a
+uniqBy eq v = uniqByWith eq snd v
+
+{-# INLINABLE argUniqBy #-}
+argUniqBy :: forall a v. (VG.Vector v a, VG.Vector v Int) => (a -> a -> Bool) -> v a -> v Int
+argUniqBy eq v = uniqByWith eq fst v
+
+{-# INLINABLE dropDuplicateBy #-}
+dropDuplicateBy :: forall a v. (Ord a, VG.Vector v a) => (a -> a -> Bool) -> v a -> v a
+dropDuplicateBy func x = uniqBy func . sortAsc $ x
+
+{-# INLINABLE dropDuplicate #-}
+dropDuplicate :: forall a v. (Ord a, VG.Vector v a) => v a -> v a
+dropDuplicate x = VG.uniq . sortAsc $ x
 
 {-# INLINABLE mean #-}
 mean :: forall a v. (Fractional a, VG.Vector v a) => (a -> Bool) -> v a -> Maybe a

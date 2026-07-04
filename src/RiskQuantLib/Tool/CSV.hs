@@ -81,7 +81,9 @@ mapAtAll func g@(AV.NodeList _) = do
 mapAtAll _ _ = return ()
 
 headN :: Int -> OG.Graph -> IO OG.Graph
-headN num g = columns g >>= \col -> g `OM.iLoc` [0..(num-1)] `ONL.getS` col
+headN num g
+  | num >= 1 = columns g >>= \col -> g `OM.iLoc` [0..(min num (OM.len g) - 1)] `ONL.getS` col
+  | otherwise = return AV.attrValueNan
 
 setAs :: OG.Graph -> AK.AttrName -> OG.Graph -> IO ()
 setAs g@(AV.NodeList _) attr value = do

@@ -1,7 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ExplicitForAll #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module RiskQuantLib.Operation.Graph (
   Graph,

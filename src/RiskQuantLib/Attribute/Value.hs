@@ -6,6 +6,8 @@ module RiskQuantLib.Attribute.Value (
   AttrValue(..),
   elementValueNan,
   attrValueNan,
+  is,
+  isNot,
   asInt,
   asDouble,
   asText,
@@ -30,6 +32,7 @@ module RiskQuantLib.Attribute.Value (
   isBool,
   isSeries,
   isNodeList,
+  nan,
   isNan,
   notNan
 ) where
@@ -288,6 +291,16 @@ instance Floating AttrValue where
   atanh (Series a) = Series $ V.map atanh a
   atanh _ = attrValueNan
 
+is :: AttrValue -> AttrValue -> Bool
+is (Element a) (Element b) = a == b
+is (Series a) (Series b) = a == b
+is (Node a) (Node b) = a == b
+is (NodeList (na, nvca)) (NodeList (nb, nvcb)) = (na == nb) && (nvca == nvcb)
+is _ _ = False
+
+isNot :: AttrValue -> AttrValue -> Bool
+isNot a b = not $ is a b
+
 asInt :: AttrValue -> AttrValue
 asInt (Series vec) = Series $ V.map asInt vec
 asInt v@(Element (ElemInt _)) = v
@@ -392,6 +405,9 @@ isSeries _ = False
 isNodeList :: AttrValue -> Bool
 isNodeList (NodeList _) = True
 isNodeList _ = False
+
+nan :: AttrValue
+nan = attrValueNan
 
 isNan :: AttrValue -> Bool
 isNan v = v == attrValueNan
